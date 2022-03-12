@@ -30,3 +30,6 @@
 *.exe
 *.out
 *.app
+
+# Videos (anything over 100mb is too big for git)
+*.mp4
