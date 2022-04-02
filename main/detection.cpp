@@ -23,11 +23,19 @@ const bool DEBUG_MODE = true;
 const char* inputfile = "../test/resources/Images/40mph/20220312_105508.mp4_frame509.jpg";
 
 // Constants
-
+// TODO make these porpotional to the image size
+const int MIN_CONTOUR_AREA = 1000;
+const int MAX_CONTOUR_AREA = 100000;
 
 // Globals for the processFrame function
 cv::Mat grayFrame;
-cv::Mat edges;
+cv::Mat blurFrame;
+cv::Mat bwFrame;
+
+
+// fuction prototypes
+void showDebugImage(std::string windowName, cv::Mat inputMat, bool debugMode);
+void printDebugImage(cv::Mat inputMat, bool debugMode);
 
 
 int main() {
@@ -44,11 +52,7 @@ int main() {
 		return -1;
 	}
 
-	if (DEBUG_MODE) {
-		cv::namedWindow("Input Image", cv::WINDOW_NORMAL);
-		cv::imshow("Input Image", originalImg);
-		cv::waitKey(0);
-	}
+	showDebugImage("Input Image", originalImg, DEBUG_MODE);
 
 	processFrame(originalImg, outputImg, 0);
 
@@ -59,55 +63,91 @@ int main() {
 
 
 /**
+ *	Helper Method to show a window with the given windowName and inputMat when debugMode is enabled.
+ */
+void showDebugImage(std::string windowName, cv::Mat inputMat, bool debugMode) {
+	
+	if (debugMode) {
+		cv::namedWindow(windowName, cv::WINDOW_NORMAL);
+		cv::imshow(windowName, inputMat);
+		cv::waitKey(0);
+	}
+}
+
+/**
+ *	Helper Method to print a frame from the given inputMat when debug mode is enabled.
+ */
+void printDebugImage(cv::Mat inputMat, bool debugMode) {
+
+	if (debugMode) {
+		cv::imwrite("debugPrintImage.jpg", inputMat);
+	}
+}
+
+
+/**
  *	Process Frame
  * 
  *	TODO add more info, change the signature as needed.
  *	TODO clone information to header file
  */
 void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
-	
-	cv::cvtColor(inputMat, grayFrame, cv::COLOR_BGR2GRAY);
-
-	// Edge Detection
-	cv::Canny(grayFrame, edges, 200, 255);
-
-	if (DEBUG_MODE) {
-		cv::namedWindow("Edges Image", cv::WINDOW_NORMAL);
-		cv::imshow("Edges Image", edges);
-		cv::waitKey(0);
-	}
-
-	// Hough Lines
-	std::vector<cv::Vec2f> lines; // will hold the results of the detection
-	cv::HoughLines(edges, lines, 1, CV_PI / 180, 150, 0, 0); // runs the actual detection
-
 
 	inputMat.copyTo(destMat);
+	
+	// Convert to GrayScale
+	cv::cvtColor(inputMat, grayFrame, cv::COLOR_BGR2GRAY);
 
-	// Draw the lines
-	for (size_t i = 0; i < lines.size(); i++)
-	{
-		float rho = lines[i][0];
-		float theta = lines[i][1];
-		
-		cv::Point pt1, pt2;
-		double a = cos(theta), b = sin(theta);
-		double x0 = a * rho, y0 = b * rho;
+	// Blur Image to smooth edges
+	cv::medianBlur(grayFrame, blurFrame, 3);
+	
+	showDebugImage("Blurred Image", blurFrame, DEBUG_MODE);
+	//printDebugImage(blurFrame, DEBUG_MODE);
 
-		pt1.x = cvRound(x0 + 1000 * (-b));
-		pt1.y = cvRound(y0 + 1000 * (a));
+	// Threshold
+	cv::threshold(blurFrame, bwFrame, 50, 255, cv::THRESH_BINARY_INV);
 
-		pt2.x = cvRound(x0 - 1000 * (-b));
-		pt2.y = cvRound(y0 - 1000 * (a));
+	showDebugImage("BW Image 1", bwFrame, DEBUG_MODE);
 
-		cv::line(destMat, pt1, pt2, cv::Scalar(0, 255, 0), 3, cv::LINE_AA);
+	// Clean up with Morphological Transform
+	//cv::Mat se = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+	//cv::morphologyEx(bwFrame, bwFrame, cv::MORPH_CLOSE, se, cv::Point(-1, -1), 1);
+
+	//showDebugImage("BW Image 2", bwFrame, DEBUG_MODE);
+
+	// Find edges 
+
+
+	// Find all the Contors
+	std::vector<std::vector<cv::Point>> contours;
+	cv::findContours(bwFrame, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+	// Draw the bounding Rectangles on the Image
+	std::vector<cv::Point> contour;
+	std::vector<cv::Point> approxPoly;
+	for (int i = 0; i < contours.size(); i++) {
+
+		contour = contours.at(i);
+
+		// filter based on size
+		int area = cv::contourArea(contour);
+		if (area > MIN_CONTOUR_AREA && area < MAX_CONTOUR_AREA) {
+
+			// approximate the shape
+			double perimeter = cv::arcLength(contour, true);
+			cv::approxPolyDP(contour, approxPoly, 0.1 * perimeter, true);
+
+			// Rectangles have 4 points
+			if (approxPoly.size() == 4) {
+				cv::drawContours(destMat, contours, i, cv::Scalar(0, 255, 0), 3);
+			}
+			else {
+				cv::drawContours(destMat, contours, i, cv::Scalar(255, 0, 0), 3);
+			}
+		}
 	}
 
-	if (DEBUG_MODE) {
-		cv::namedWindow("Output Image", cv::WINDOW_NORMAL);
-		cv::imshow("Output Image", destMat);
-		cv::waitKey(0);
-	}
+	showDebugImage("Output Image", destMat, DEBUG_MODE);
 
 	return;
 }
