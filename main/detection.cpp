@@ -5,8 +5,6 @@
 #include <vector>
 
 #include "detection.h"
-
-#define DEBUG true
 #include "utils/debugUtil.h"
 
 // --------------------------
@@ -64,7 +62,7 @@ int main() {
 
 
 /**
- *	Process Frame
+ *	Process Frame 
  * 
  *	TODO add more info, change the signature as needed.
  *	TODO clone information to header file
@@ -101,6 +99,7 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 	std::vector<ShapeInfo> shapeVect;
 	detectShapes(inputMat, &shapeVect);
 
+	// Draw the Identified Shapes
 	for (int i = 0; i < shapeVect.size(); i++) {
 		ShapeInfo sInfo = shapeVect.at(i);
 
@@ -115,10 +114,13 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 }
 
 /**
- *	DetectShapes
+ *	DetectShapes 
  *
- *	TODO add more info, change the signature as needed.
- *	TODO clone information to header file
+ *	Using the openCV function 'findContours' on passed in Black and White Image; the method will return the
+ *	  shape (as an int) as well as the vector of points that make up that shape as a pair
+ * 
+ *	@param	inputMat	input matrix with Black and White Image
+ *	@param	shapeVect	output shapeInfo vector
  */
 void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 
@@ -126,18 +128,18 @@ void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(bwFrame, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-	// Draw the bounding Rectangles on the Image
+	// Identify the Shapes
 	std::vector<cv::Point> contour;
 	std::vector<cv::Point> approxPoly;
 	for (int i = 0; i < contours.size(); i++) {
 
 		contour = contours.at(i);
 
-		// filter based on size
+		// Filter based on size
 		int area = cv::contourArea(contour);
 		if (area > min_contour_area && area < max_contour_area) {
 
-			// approximate the shape
+			// Approximate the shape
 			double perimeter = cv::arcLength(contour, true);
 			cv::approxPolyDP(contour, approxPoly, 0.1 * perimeter, true);
 
@@ -152,9 +154,11 @@ void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 				shape = SHAPE_OCTAGON;
 			}
 
+			// Build the ShapeInfo outcome
 			ShapeInfo shapeInfo = ShapeInfo(shape, approxPoly);
 			shapeVect->push_back(shapeInfo);
 		}
 	}
 
+	return;
 }
