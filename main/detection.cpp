@@ -2,8 +2,12 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include <iostream>
+#include <vector>
 
 #include "detection.h"
+
+#define DEBUG true
+#include "utils/debugUtil.h"
 
 // --------------------------
 // Sign Detection Code
@@ -13,29 +17,26 @@
 // --------------------------
 
 
-const bool DEBUG_MODE = true;
-
 // compile command:
-// cl /EHsc detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib
+// cl /EHsc detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/*.obj
 
 
 // Input file
 const char* inputfile = "../test/resources/Images/40mph/20220312_105508.mp4_frame509.jpg";
 
 // Constants
-// TODO make these porpotional to the image size
-const int MIN_CONTOUR_AREA = 1000;
-const int MAX_CONTOUR_AREA = 100000;
+const float MIN_CONTOUR_AREA_PERCENTAGE = 0.001;
+const float MAX_CONTOUR_AREA_PERCENTAGE = 0.05;
 
 // Globals for the processFrame function
+int min_contour_area;
+int max_contour_area;
 cv::Mat grayFrame;
 cv::Mat blurFrame;
 cv::Mat bwFrame;
 
-
-// fuction prototypes
-void showDebugImage(std::string windowName, cv::Mat inputMat, bool debugMode);
-void printDebugImage(cv::Mat inputMat, bool debugMode);
+// private function prototypes
+void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect);
 
 
 int main() {
@@ -52,36 +53,13 @@ int main() {
 		return -1;
 	}
 
-	showDebugImage("Input Image", originalImg, DEBUG_MODE);
+	showDebugImage("Input Image", originalImg);
 
-	processFrame(originalImg, outputImg, 0);
+	processFrame(originalImg, outputImg);
 
 	// Clean up
 	cv::destroyAllWindows();
 	return 0;
-}
-
-
-/**
- *	Helper Method to show a window with the given windowName and inputMat when debugMode is enabled.
- */
-void showDebugImage(std::string windowName, cv::Mat inputMat, bool debugMode) {
-	
-	if (debugMode) {
-		cv::namedWindow(windowName, cv::WINDOW_NORMAL);
-		cv::imshow(windowName, inputMat);
-		cv::waitKey(0);
-	}
-}
-
-/**
- *	Helper Method to print a frame from the given inputMat when debug mode is enabled.
- */
-void printDebugImage(cv::Mat inputMat, bool debugMode) {
-
-	if (debugMode) {
-		cv::imwrite("debugPrintImage.jpg", inputMat);
-	}
 }
 
 
@@ -94,6 +72,17 @@ void printDebugImage(cv::Mat inputMat, bool debugMode) {
 void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 
 	inputMat.copyTo(destMat);
+
+	// Frame 0; setup some globals
+	if (frameNum == 0) {
+		int pixelSize = inputMat.rows * inputMat.cols;
+		
+		min_contour_area = pixelSize * MIN_CONTOUR_AREA_PERCENTAGE;
+		max_contour_area = pixelSize * MAX_CONTOUR_AREA_PERCENTAGE;
+
+		printDebugLine("min_contour_area = " + std::to_string(min_contour_area));
+		printDebugLine("max_contour_area = " + std::to_string(max_contour_area));
+	}
 	
 	// Convert to GrayScale
 	cv::cvtColor(inputMat, grayFrame, cv::COLOR_BGR2GRAY);
@@ -101,22 +90,37 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 	// Blur Image to smooth edges
 	cv::medianBlur(grayFrame, blurFrame, 3);
 	
-	showDebugImage("Blurred Image", blurFrame, DEBUG_MODE);
+	showDebugImage("Blurred Image", blurFrame);
 	//printDebugImage(blurFrame, DEBUG_MODE);
 
 	// Threshold
 	cv::threshold(blurFrame, bwFrame, 50, 255, cv::THRESH_BINARY_INV);
 
-	showDebugImage("BW Image 1", bwFrame, DEBUG_MODE);
+	showDebugImage("BW Image 1", bwFrame);
 
-	// Clean up with Morphological Transform
-	//cv::Mat se = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-	//cv::morphologyEx(bwFrame, bwFrame, cv::MORPH_CLOSE, se, cv::Point(-1, -1), 1);
+	std::vector<ShapeInfo> shapeVect;
+	detectShapes(inputMat, &shapeVect);
 
-	//showDebugImage("BW Image 2", bwFrame, DEBUG_MODE);
+	for (int i = 0; i < shapeVect.size(); i++) {
+		ShapeInfo sInfo = shapeVect.at(i);
 
-	// Find edges 
+		if (sInfo.first == SHAPE_RECTANGLE) {
+			cv::polylines(destMat, sInfo.second, true, cv::Scalar(0, 255, 0), 1);
+		}
+	}
 
+	showDebugImage("Output Image", destMat);
+
+	return;
+}
+
+/**
+ *	DetectShapes
+ *
+ *	TODO add more info, change the signature as needed.
+ *	TODO clone information to header file
+ */
+void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 
 	// Find all the Contors
 	std::vector<std::vector<cv::Point>> contours;
@@ -131,23 +135,26 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 
 		// filter based on size
 		int area = cv::contourArea(contour);
-		if (area > MIN_CONTOUR_AREA && area < MAX_CONTOUR_AREA) {
+		if (area > min_contour_area && area < max_contour_area) {
 
 			// approximate the shape
 			double perimeter = cv::arcLength(contour, true);
 			cv::approxPolyDP(contour, approxPoly, 0.1 * perimeter, true);
 
-			// Rectangles have 4 points
-			if (approxPoly.size() == 4) {
-				cv::drawContours(destMat, contours, i, cv::Scalar(0, 255, 0), 3);
+			int shape = SHAPE_UNDEFINED;
+			if (approxPoly.size() == 3) {
+				shape = SHAPE_TRIANGLE;
 			}
-			else {
-				cv::drawContours(destMat, contours, i, cv::Scalar(255, 0, 0), 3);
+			else if (approxPoly.size() == 4) {
+				shape = SHAPE_RECTANGLE;
 			}
+			else if (approxPoly.size() == 8) {
+				shape = SHAPE_OCTAGON;
+			}
+
+			ShapeInfo shapeInfo = ShapeInfo(shape, approxPoly);
+			shapeVect->push_back(shapeInfo);
 		}
 	}
 
-	showDebugImage("Output Image", destMat, DEBUG_MODE);
-
-	return;
 }
