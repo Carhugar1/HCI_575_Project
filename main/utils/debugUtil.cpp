@@ -18,9 +18,9 @@ const bool DEBUG_MODE = true;
 /**
  *	Helper Method to show a window with the given windowName and inputMat when DEBUG_MODE equals true.
  */
-void showDebugImage(std::string windowName, cv::Mat inputMat) {
+void showDebugImage(std::string windowName, cv::Mat inputMat, int windowFlags) {
 	if (DEBUG_MODE) {
-		cv::namedWindow(windowName, cv::WINDOW_NORMAL);
+		cv::namedWindow(windowName, windowFlags);
 		cv::imshow(windowName, inputMat);
 		cv::waitKey(0);
 	}

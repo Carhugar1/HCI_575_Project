@@ -14,6 +14,9 @@
 // compile command:
 // cl /EHsc thresholdUtil.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib
 
+// execute command:
+// thresholdUtil.exe
+
 
 // Input files
 const char* input = "../debugPrintImage.jpg";

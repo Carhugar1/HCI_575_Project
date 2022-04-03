@@ -18,6 +18,9 @@
 // compile command:
 // cl /EHsc detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/*.obj
 
+// execute command:
+// detection.exe
+
 
 // Input file
 const char* inputfile = "../test/resources/Images/40mph/20220312_105508.mp4_frame509.jpg";
@@ -25,6 +28,7 @@ const char* inputfile = "../test/resources/Images/40mph/20220312_105508.mp4_fram
 // Constants
 const float MIN_CONTOUR_AREA_PERCENTAGE = 0.001;
 const float MAX_CONTOUR_AREA_PERCENTAGE = 0.05;
+const int IDEAL_SIGN_SIZE_PX = 250;
 
 // Globals for the processFrame function
 int min_contour_area;
@@ -32,9 +36,12 @@ int max_contour_area;
 cv::Mat grayFrame;
 cv::Mat blurFrame;
 cv::Mat bwFrame;
+cv::Mat subMat;
 
 // private function prototypes
 void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect);
+void getShapeSubMatrix(cv::Mat inputMat, cv::Mat& subMat, ShapeInfo* shapeInfo);
+void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output);
 
 
 int main() {
@@ -51,7 +58,7 @@ int main() {
 		return -1;
 	}
 
-	showDebugImage("Input Image", originalImg);
+	showDebugImage("Input Image", originalImg, cv::WINDOW_NORMAL);
 
 	processFrame(originalImg, outputImg);
 
@@ -88,27 +95,38 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 	// Blur Image to smooth edges
 	cv::medianBlur(grayFrame, blurFrame, 3);
 	
-	showDebugImage("Blurred Image", blurFrame);
-	//printDebugImage(blurFrame, DEBUG_MODE);
+	showDebugImage("Blurred Image", blurFrame, cv::WINDOW_NORMAL);
+	//printDebugImage(blurFrame);
 
 	// Threshold
 	cv::threshold(blurFrame, bwFrame, 50, 255, cv::THRESH_BINARY_INV);
 
-	showDebugImage("BW Image 1", bwFrame);
+	showDebugImage("BW Image 1", bwFrame, cv::WINDOW_NORMAL);
 
 	std::vector<ShapeInfo> shapeVect;
-	detectShapes(inputMat, &shapeVect);
+	detectShapes(bwFrame, &shapeVect);
 
-	// Draw the Identified Shapes
+	/*// Draw the Identified Shapes
 	for (int i = 0; i < shapeVect.size(); i++) {
 		ShapeInfo sInfo = shapeVect.at(i);
 
 		if (sInfo.first == SHAPE_RECTANGLE) {
 			cv::polylines(destMat, sInfo.second, true, cv::Scalar(0, 255, 0), 1);
 		}
+	}*/
+
+	// Identify the Speed Limits in the submatrixes
+	for (int i = 0; i < shapeVect.size(); i++) {
+		ShapeInfo sInfo = shapeVect.at(i);
+
+		if (sInfo.first == SHAPE_RECTANGLE) {
+
+			getShapeSubMatrix(bwFrame, subMat, &sInfo);
+			detectSpeedLimit(subMat, destMat);
+		}
 	}
 
-	showDebugImage("Output Image", destMat);
+	showDebugImage("Output Image", destMat, cv::WINDOW_NORMAL);
 
 	return;
 }
@@ -126,7 +144,7 @@ void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 
 	// Find all the Contors
 	std::vector<std::vector<cv::Point>> contours;
-	cv::findContours(bwFrame, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+	cv::findContours(inputMat, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
 	// Identify the Shapes
 	std::vector<cv::Point> contour;
@@ -159,6 +177,68 @@ void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 			shapeVect->push_back(shapeInfo);
 		}
 	}
+
+	return;
+}
+
+/**
+ *	Get Shape SubMatrix
+ *
+ *	@param	inputMat	input matrix
+ *	@param	subMat		sub matrix output
+ *	@param	shapeInfo	shape information
+ */
+void getShapeSubMatrix(cv::Mat inputMat, cv::Mat& subMat, ShapeInfo* shapeInfo) {
+
+	int minC = inputMat.cols, maxC = 0, minR = inputMat.rows, maxR = 0;
+	for (int j = 0; j < shapeInfo->second.size(); j++) {
+
+		cv::Point p = shapeInfo->second.at(j); // (x, y) --> (column, row)
+
+		if (p.x < minC) { minC = p.x; }
+		if (p.x > maxC) { maxC = p.x; }
+		if (p.y < minR) { minR = p.y; }
+		if (p.y > maxR) { maxR = p.y; }
+	}
+
+	cv::Range rRange(minR, maxR);
+	cv::Range cRange(minC, maxC);
+	inputMat(rRange, cRange).copyTo(subMat);
+
+	return;
+}
+
+/**
+ *	Detect Speed Limit 
+ * 
+ *	TODO Documentation
+ * 
+ *	@param	inputMat	input matrix with Black and White Image of Sign
+ */
+void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
+
+	// Resize the Image so we have a known size to work with
+	cv::Mat resizedInput;
+
+	double wFactor = IDEAL_SIGN_SIZE_PX / inputMat.cols; // width factor
+	double hFactor = IDEAL_SIGN_SIZE_PX / inputMat.rows; // height factor
+
+	if (wFactor > hFactor) {
+		hFactor = wFactor;
+	}
+	else {
+		wFactor = hFactor;
+	}
+
+	cv::resize(inputMat, resizedInput, cv::Size(), wFactor, hFactor);
+
+	// Clean up the Image
+	cv::Mat se = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+	cv::morphologyEx(resizedInput, resizedInput, cv::MORPH_CLOSE, se, cv::Point(-1, -1), 2);
+
+	showDebugImage("Resized Image", resizedInput, cv::WINDOW_AUTOSIZE);
+
+	// Speed Limit Detection via Morphological Operations
 
 	return;
 }

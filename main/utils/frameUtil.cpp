@@ -12,13 +12,16 @@
 // compile command:
 // cl /EHsc frameUtil.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib
 
+// execute command:
+// frameUtil.exe
+
 
 // Input
-const std::string inputVideoLocation = "./resources/Videos/";
+const std::string inputVideoLocation = "../../test/resources/Videos/";
 const std::string inputVideo = "20220312_105508.mp4";
 
 // Output
-const std::string outputImageLocation = "./resources/Images/";
+const std::string outputImageLocation = "../../test/resources/Images/";
 
 // VideoCapture
 cv::VideoCapture inputCap;
