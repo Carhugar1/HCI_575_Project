@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "detection.h"
+#include "numberSE.h"
 #include "utils/debugUtil.h"
 
 // --------------------------
@@ -16,7 +17,7 @@
 
 
 // compile command:
-// cl /EHsc detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/*.obj
+// cl /EHsc detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/debugUtil.obj
 
 // execute command:
 // detection.exe
@@ -238,7 +239,27 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 
 	showDebugImage("Resized Image", resizedInput, cv::WINDOW_AUTOSIZE);
 
+	cv::Mat speed = cv::Mat::zeros(resizedInput.size(), resizedInput.type());
 	// Speed Limit Detection via Morphological Operations
+	// TODO loop
+
+	// Zero
+	cv::Mat numZero;
+	cv::morphologyEx(resizedInput, numZero, cv::MORPH_OPEN, SE_NUM_ZERO);
+
+	showDebugImage("Zero Image", numZero, cv::WINDOW_AUTOSIZE);
+
+	speed += numZero;
+
+	// Four
+	cv::Mat numFour;
+	cv::morphologyEx(resizedInput, numFour, cv::MORPH_OPEN, SE_NUM_FOUR);
+
+	showDebugImage("Four Image", numFour, cv::WINDOW_AUTOSIZE);
+
+	speed += numFour;
+
+	showDebugImage("Speed Limit Number Image", speed, cv::WINDOW_AUTOSIZE);
 
 	return;
 }
