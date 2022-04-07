@@ -221,8 +221,9 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 	// Resize the Image so we have a known size to work with
 	cv::Mat resizedInput;
 
-	double wFactor = IDEAL_SIGN_SIZE_PX / inputMat.cols; // width factor
-	double hFactor = IDEAL_SIGN_SIZE_PX / inputMat.rows; // height factor
+	// Calculate resize factors (cast to double to force floating point division)
+	double wFactor = static_cast<double>(IDEAL_SIGN_SIZE_PX) / inputMat.cols; // width factor
+	double hFactor = static_cast<double>(IDEAL_SIGN_SIZE_PX) / inputMat.rows; // height factor
 
 	if (wFactor > hFactor) {
 		hFactor = wFactor;
@@ -233,6 +234,14 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 
 	cv::resize(inputMat, resizedInput, cv::Size(), wFactor, hFactor);
 
+	//printDebugLine("inputMat.rows = " + std::to_string(inputMat.rows));
+	//printDebugLine("inputMat.cols = " + std::to_string(inputMat.cols));
+
+	//printDebugLine("resizedInput.rows = " + std::to_string(resizedInput.rows));
+	//printDebugLine("resizedInput.cols = " + std::to_string(resizedInput.cols));
+
+	//printDebugImage(resizedInput);
+
 	// Clean up the Image
 	cv::Mat se = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
 	cv::morphologyEx(resizedInput, resizedInput, cv::MORPH_CLOSE, se, cv::Point(-1, -1), 2);
@@ -240,12 +249,15 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 	showDebugImage("Resized Image", resizedInput, cv::WINDOW_AUTOSIZE);
 
 	cv::Mat speed = cv::Mat::zeros(resizedInput.size(), resizedInput.type());
+	cv::Mat rotatedSE;
 	// Speed Limit Detection via Morphological Operations
 	// TODO loop
 
 	// Zero
 	cv::Mat numZero;
-	cv::morphologyEx(resizedInput, numZero, cv::MORPH_OPEN, SE_NUM_ZERO);
+	cv::morphologyEx(resizedInput, numZero, cv::MORPH_ERODE, SE_NUM_ZERO);
+	cv::rotate(SE_NUM_ZERO, rotatedSE, cv::ROTATE_180);
+	cv::morphologyEx(numZero, numZero, cv::MORPH_DILATE, rotatedSE);
 
 	showDebugImage("Zero Image", numZero, cv::WINDOW_AUTOSIZE);
 
@@ -253,7 +265,9 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 
 	// Four
 	cv::Mat numFour;
-	cv::morphologyEx(resizedInput, numFour, cv::MORPH_OPEN, SE_NUM_FOUR);
+	cv::morphologyEx(resizedInput, numFour, cv::MORPH_ERODE, SE_NUM_FOUR);
+	cv::rotate(SE_NUM_FOUR, rotatedSE, cv::ROTATE_180);
+	cv::morphologyEx(numFour, numFour, cv::MORPH_DILATE, rotatedSE);
 
 	showDebugImage("Four Image", numFour, cv::WINDOW_AUTOSIZE);
 
