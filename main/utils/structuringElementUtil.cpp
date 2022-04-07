@@ -20,9 +20,9 @@
 
 
 // Input files
-const char* inputfile = "../temp/0.jpg";
-const char* outputfile = "../temp/seUtilImage0.jpg";
-const char* matfile = "../temp/seUtilMat0.txt";
+const char* inputfile = "../temp/4.jpg";
+const char* outputfile = "../temp/seUtilImage4.jpg";
+const char* matfile = "../temp/seUtilMat4.txt";
 
 // Mats
 cv::Mat originalImg;
@@ -78,41 +78,52 @@ int main() {
 	return 0;
 }
 
-// https://theailearner.com/tag/thinning-opencv/
+// https://homepages.inf.ed.ac.uk/rbf/HIPR2/thin.htm
 // AND
-// https://en.wikipedia.org/wiki/Morphological_skeleton
+// https://en.wikipedia.org/wiki/Hit-or-miss_transform
+// AND
+// https://docs.opencv.org/4.x/db/d06/tutorial_hitOrMiss.html
 void thin(cv::Mat inputMat, cv::Mat& destMat) {
 
 	cv::Mat img;
 	inputMat.copyTo(img);
 
-	// Structuring Element
-	cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+	// Structuring Elements
+	cv::Mat B1, B2, B3, B4, B5, B6, B7, B8;
+	B1 = (cv::Mat_<int>(3, 3) << -1, -1, -1, 0, 1, 0, 1, 1, 1);
+	B2 = (cv::Mat_<int>(3, 3) << 0, -1, -1, 1, 1, -1, 0, 1, 0);
+	cv::rotate(B1, B3, cv::ROTATE_90_CLOCKWISE);
+	cv::rotate(B2, B4, cv::ROTATE_90_CLOCKWISE);
+	cv::rotate(B1, B5, cv::ROTATE_180);
+	cv::rotate(B2, B6, cv::ROTATE_180);
+	cv::rotate(B1, B7, cv::ROTATE_90_COUNTERCLOCKWISE);
+	cv::rotate(B2, B8, cv::ROTATE_90_COUNTERCLOCKWISE);
+	
+	cv::Mat Bn[8] = { B1, B2, B3, B4, B5, B6, B7, B8 };
 
 	// Empty Output Img
 	cv::Mat thin = cv::Mat::zeros(inputMat.size(), CV_8UC1);
 
-	bool done = false;
-	while (!done) {
+	while (true) {
 
-		// Erode
-		cv::Mat erode;
-		cv::erode(img, erode, element);
+		cv::Mat mask = cv::Mat::zeros(inputMat.size(), CV_8UC1);
 
-		// Opening
-		cv::Mat opening;
-		cv::morphologyEx(erode, opening, cv::MORPH_OPEN, element);
-
+		for (int i = 0; i < 8; i++) {
+			// Hit or Miss
+			cv::Mat temp;
+			cv::morphologyEx(img, temp, cv::MORPH_HITMISS, Bn[i]);
+			cv::bitwise_or(mask, temp, mask);
+		}
+		
 		// Subtraction
-		cv::Mat subset;
-		subset = erode - opening;
+		img = img - mask;
 
-		// Union
-		cv::bitwise_or(subset, thin, thin);
+		// Convergence
+		if (cv::countNonZero(img) == cv::countNonZero(thin)) {
+			break;
+		};
 
-		// Set variables for next iteration
-		erode.copyTo(img);
-		done = cv::countNonZero(img) == 0;
+		img.copyTo(thin);
 	}
 
 	thin.copyTo(destMat);
