@@ -31,6 +31,12 @@ const float MIN_CONTOUR_AREA_PERCENTAGE = 0.001;
 const float MAX_CONTOUR_AREA_PERCENTAGE = 0.05;
 const int IDEAL_SIGN_SIZE_PX = 250;
 
+// Text Constants
+const int FONT_FACE = cv::FONT_HERSHEY_PLAIN;
+const double FONT_SCALE = 1.5;
+const int FONT_THICKNESS = 2;
+const int TEXT_OFFSET = 5;
+
 // Globals for the processFrame function
 int min_contour_area;
 int max_contour_area;
@@ -40,9 +46,7 @@ cv::Mat bwFrame;
 cv::Mat subMat;
 
 // private function prototypes
-void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect);
-void getShapeSubMatrix(cv::Mat inputMat, cv::Mat& subMat, ShapeInfo* shapeInfo);
-void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output);
+void cloneShapeInfo(ShapeInfo* shapeInfo, SignInfo* obj);
 
 
 int main() {
@@ -70,10 +74,7 @@ int main() {
 
 
 /**
- *	Process Frame 
- * 
- *	TODO add more info, change the signature as needed.
- *	TODO clone information to header file
+ *	Process Frame
  */
 void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 
@@ -107,23 +108,39 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 	std::vector<ShapeInfo> shapeVect;
 	detectShapes(bwFrame, &shapeVect);
 
-	/*// Draw the Identified Shapes
-	for (int i = 0; i < shapeVect.size(); i++) {
-		ShapeInfo sInfo = shapeVect.at(i);
-
-		if (sInfo.first == SHAPE_RECTANGLE) {
-			cv::polylines(destMat, sInfo.second, true, cv::Scalar(0, 255, 0), 1);
-		}
-	}*/
-
 	// Identify the Speed Limits in the submatrixes
+	SignInfo signInfo;
 	for (int i = 0; i < shapeVect.size(); i++) {
-		ShapeInfo sInfo = shapeVect.at(i);
+		ShapeInfo shapeInfo = shapeVect.at(i);
 
-		if (sInfo.first == SHAPE_RECTANGLE) {
+		cloneShapeInfo(&shapeInfo, &signInfo);
+		signInfo.sign = SIGN_UNDEFINED;
 
-			getShapeSubMatrix(bwFrame, subMat, &sInfo);
-			detectSpeedLimit(subMat, destMat);
+		if (shapeInfo.shape == SHAPE_RECTANGLE) {
+
+			getShapeSubMatrix(bwFrame, subMat, &shapeInfo);
+			detectSpeedLimit(subMat, &signInfo);
+
+			if (signInfo.sign == SIGN_SPEEDLIMIT) {
+				cv::String text = "Speed Limit: " + signInfo.stringValue;
+
+				printDebugLine(text);
+
+				cv::Rect rect = cv::boundingRect(signInfo.contour);
+
+				// Add the Text
+				int baseline = 0;
+				cv::Size textSize = cv::getTextSize(text, FONT_FACE, FONT_SCALE, FONT_THICKNESS, &baseline);
+				cv::Point textPoint(rect.x, rect.y - baseline);
+				cv::putText(destMat, text, textPoint, FONT_FACE, FONT_SCALE, cv::Scalar(0, 255, 0), FONT_THICKNESS);
+
+				// Draw the Identified Rectangle
+				cv::rectangle(destMat, rect, cv::Scalar(0, 255, 0), 1);
+			}
+			else {
+				// Draw the Identified Rectangle
+				cv::polylines(destMat, signInfo.contour, true, cv::Scalar(0, 255, 0), 1);
+			}
 		}
 	}
 
@@ -133,13 +150,7 @@ void processFrame(cv::Mat inputMat, cv::Mat& destMat, int frameNum) {
 }
 
 /**
- *	DetectShapes 
- *
- *	Using the openCV function 'findContours' on passed in Black and White Image; the method will return the
- *	  shape (as an int) as well as the vector of points that make up that shape as a pair
- * 
- *	@param	inputMat	input matrix with Black and White Image
- *	@param	shapeVect	output shapeInfo vector
+ *	DetectShapes
  */
 void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 
@@ -174,7 +185,10 @@ void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 			}
 
 			// Build the ShapeInfo outcome
-			ShapeInfo shapeInfo = ShapeInfo(shape, approxPoly);
+			ShapeInfo shapeInfo;
+			shapeInfo.shape = shape;
+			shapeInfo.contour = approxPoly;
+
 			shapeVect->push_back(shapeInfo);
 		}
 	}
@@ -183,40 +197,9 @@ void detectShapes(cv::Mat inputMat, std::vector<ShapeInfo>* shapeVect) {
 }
 
 /**
- *	Get Shape SubMatrix
- *
- *	@param	inputMat	input matrix
- *	@param	subMat		sub matrix output
- *	@param	shapeInfo	shape information
+ *	Detect Speed Limit
  */
-void getShapeSubMatrix(cv::Mat inputMat, cv::Mat& subMat, ShapeInfo* shapeInfo) {
-
-	int minC = inputMat.cols, maxC = 0, minR = inputMat.rows, maxR = 0;
-	for (int j = 0; j < shapeInfo->second.size(); j++) {
-
-		cv::Point p = shapeInfo->second.at(j); // (x, y) --> (column, row)
-
-		if (p.x < minC) { minC = p.x; }
-		if (p.x > maxC) { maxC = p.x; }
-		if (p.y < minR) { minR = p.y; }
-		if (p.y > maxR) { maxR = p.y; }
-	}
-
-	cv::Range rRange(minR, maxR);
-	cv::Range cRange(minC, maxC);
-	inputMat(rRange, cRange).copyTo(subMat);
-
-	return;
-}
-
-/**
- *	Detect Speed Limit 
- * 
- *	TODO Documentation
- * 
- *	@param	inputMat	input matrix with Black and White Image of Sign
- */
-void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
+void detectSpeedLimit(cv::Mat inputMat, SignInfo* signInfo) {
 
 	// Resize the Image so we have a known size to work with
 	cv::Mat resizedInput;
@@ -234,14 +217,6 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 
 	cv::resize(inputMat, resizedInput, cv::Size(), wFactor, hFactor);
 
-	//printDebugLine("inputMat.rows = " + std::to_string(inputMat.rows));
-	//printDebugLine("inputMat.cols = " + std::to_string(inputMat.cols));
-
-	//printDebugLine("resizedInput.rows = " + std::to_string(resizedInput.rows));
-	//printDebugLine("resizedInput.cols = " + std::to_string(resizedInput.cols));
-
-	//printDebugImage(resizedInput);
-
 	// Clean up the Image
 	cv::Mat se = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
 	cv::morphologyEx(resizedInput, resizedInput, cv::MORPH_CLOSE, se, cv::Point(-1, -1), 2);
@@ -250,30 +225,112 @@ void detectSpeedLimit(cv::Mat inputMat, cv::Mat& output) {
 
 	cv::Mat speed = cv::Mat::zeros(resizedInput.size(), resizedInput.type());
 	cv::Mat rotatedSE;
+	cv::Mat horizontalProjection, left, right;
+	int cols = 0;
+	uint8_t tensDigitPlaceValue = 0; 
+	uint8_t onesDigitPlaceValue = 0;
 	// Speed Limit Detection via Morphological Operations
 	// TODO loop
 
 	// Zero
 	cv::Mat numZero;
 	cv::morphologyEx(resizedInput, numZero, cv::MORPH_ERODE, SE_NUM_ZERO);
-	cv::rotate(SE_NUM_ZERO, rotatedSE, cv::ROTATE_180);
-	cv::morphologyEx(numZero, numZero, cv::MORPH_DILATE, rotatedSE);
+	
+	// If the Result has a non 0 in it we have a match
+	if (cv::countNonZero(numZero) > 0) {
 
-	showDebugImage("Zero Image", numZero, cv::WINDOW_AUTOSIZE);
+		cv::reduce(numZero, horizontalProjection, 0, cv::REDUCE_SUM, CV_32F);
+		cols = horizontalProjection.cols;
+		left = horizontalProjection(cv::Range::all(), cv::Range(0, (cols / 2 - 10)));
+		right = horizontalProjection(cv::Range::all(), cv::Range((cols / 2 + 10), cols));
 
-	speed += numZero;
+		if (cv::countNonZero(left) > 0) {
+			tensDigitPlaceValue = 0;
+		}
+		if (cv::countNonZero(right) > 0) {
+			onesDigitPlaceValue = 0;
+		}
+
+		// Add it to the Output Mat?
+		cv::rotate(SE_NUM_ZERO, rotatedSE, cv::ROTATE_180);
+		cv::morphologyEx(numZero, numZero, cv::MORPH_DILATE, rotatedSE);
+		speed += numZero;
+	}
+	
 
 	// Four
 	cv::Mat numFour;
 	cv::morphologyEx(resizedInput, numFour, cv::MORPH_ERODE, SE_NUM_FOUR);
-	cv::rotate(SE_NUM_FOUR, rotatedSE, cv::ROTATE_180);
-	cv::morphologyEx(numFour, numFour, cv::MORPH_DILATE, rotatedSE);
 
-	showDebugImage("Four Image", numFour, cv::WINDOW_AUTOSIZE);
+	// Result check
+	if (cv::countNonZero(numFour) > 0) {
 
-	speed += numFour;
+		cv::reduce(numFour, horizontalProjection, 0, cv::REDUCE_SUM, CV_32F);
+		cols = horizontalProjection.cols;
+		left = horizontalProjection(cv::Range::all(), cv::Range(0, (cols / 2 - 10)));
+		right = horizontalProjection(cv::Range::all(), cv::Range((cols / 2 + 10), cols));
+
+		if (cv::countNonZero(left) > 0) {
+			tensDigitPlaceValue = 4;
+		}
+		if (cv::countNonZero(right) > 0) {
+			onesDigitPlaceValue = 4;
+		}
+
+		// Add it to the Output Mat?
+		cv::rotate(SE_NUM_FOUR, rotatedSE, cv::ROTATE_180);
+		cv::morphologyEx(numFour, numFour, cv::MORPH_DILATE, rotatedSE);
+		speed += numFour;
+	}
+
+	if (tensDigitPlaceValue != 0 || onesDigitPlaceValue != 0) {
+		signInfo->sign = SIGN_SPEEDLIMIT;
+		signInfo->intValue = (tensDigitPlaceValue * 10) + onesDigitPlaceValue;
+		signInfo->stringValue = std::to_string(signInfo->intValue);
+	}
 
 	showDebugImage("Speed Limit Number Image", speed, cv::WINDOW_AUTOSIZE);
 
 	return;
+}
+
+/**
+ *	Get Shape SubMatrix
+ */
+void getShapeSubMatrix(cv::Mat inputMat, cv::Mat& subMat, ShapeInfo* shapeInfo) {
+
+	int minC = inputMat.cols, maxC = 0, minR = inputMat.rows, maxR = 0;
+	for (int j = 0; j < shapeInfo->contour.size(); j++) {
+
+		cv::Point p = shapeInfo->contour.at(j); // (x, y) --> (column, row)
+
+		if (p.x < minC) { minC = p.x; }
+		if (p.x > maxC) { maxC = p.x; }
+		if (p.y < minR) { minR = p.y; }
+		if (p.y > maxR) { maxR = p.y; }
+	}
+
+	cv::Range rRange(minR, maxR);
+	cv::Range cRange(minC, maxC);
+	inputMat(rRange, cRange).copyTo(subMat);
+
+	return;
+}
+
+/**
+ *	Converts the given SignInfo Object to a ShapeInfo Object
+ */
+void getShapeInfo(SignInfo* obj, ShapeInfo* shapeInfo) {
+	
+	shapeInfo->shape = obj->shape;
+	shapeInfo->contour = obj->contour;
+}
+
+/**
+ *	Copies the given ShapeInfo Object into a SignInfo Object
+ */
+void cloneShapeInfo(ShapeInfo* shapeInfo, SignInfo* obj) {
+
+	obj->shape = shapeInfo->shape;
+	obj->contour = shapeInfo->contour;
 }
