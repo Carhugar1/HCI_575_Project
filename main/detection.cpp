@@ -15,17 +15,6 @@
 //		Spring 2022
 // --------------------------
 
-
-// compile command:
-// cl /EHsc detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/debugUtil.obj
-
-// execute command:
-// detection.exe
-
-
-// Input file
-const char* inputfile = "../test/resources/Images/40mph/20220312_105508.mp4_frame509.jpg";
-
 // Constants
 const float MIN_CONTOUR_AREA_PERCENTAGE = 0.001;
 const float MAX_CONTOUR_AREA_PERCENTAGE = 0.05;
@@ -47,30 +36,6 @@ cv::Mat subMat;
 
 // private function prototypes
 void cloneShapeInfo(ShapeInfo* shapeInfo, SignInfo* obj);
-
-
-int main() {
-
-	// Mats
-	cv::Mat originalImg;
-	cv::Mat outputImg;
-
-	originalImg = cv::imread(inputfile, cv::IMREAD_COLOR);
-
-	// ensure image was valid
-	if (!originalImg.data) {
-		std::cout << "Missing data." << std::endl;
-		return -1;
-	}
-
-	showDebugImage("Input Image", originalImg, cv::WINDOW_NORMAL);
-
-	processFrame(originalImg, outputImg);
-
-	// Clean up
-	cv::destroyAllWindows();
-	return 0;
-}
 
 
 /**
