@@ -19,6 +19,9 @@
 const float MIN_CONTOUR_AREA_PERCENTAGE = 0.001;
 const float MAX_CONTOUR_AREA_PERCENTAGE = 0.05;
 const int IDEAL_SIGN_SIZE_PX = 250;
+const int SIGN_OUTSIDE_OFFSET_PX = 50;
+const int SIGN_MIDDLE_OFFSET_PX = 50;
+const int SIGN_DETECTION_ORDER[] = { 1, 3, 0, 2, 4, 5, 6, 7, 8 };
 
 // Text Constants
 const int FONT_FACE = cv::FONT_HERSHEY_PLAIN;
@@ -194,58 +197,44 @@ void detectSpeedLimit(cv::Mat inputMat, SignInfo* signInfo) {
 	int cols = 0;
 	uint8_t tensDigitPlaceValue = 0; 
 	uint8_t onesDigitPlaceValue = 0;
+	int effectiveNum = 0;
 	// Speed Limit Detection via Morphological Operations
-	// TODO loop
+	// TODO handle 9 as well (handles 0 - 8 at the moment)
+	for (int i = 0; i < 9; i++) {
+		
+		effectiveNum = SIGN_DETECTION_ORDER[i];
 
-	// Zero
-	cv::Mat numZero;
-	cv::morphologyEx(resizedInput, numZero, cv::MORPH_ERODE, SE_NUM_ZERO);
-	
-	// If the Result has a non 0 in it we have a match
-	if (cv::countNonZero(numZero) > 0) {
+		cv::Mat numMat;
+		cv::morphologyEx(resizedInput, numMat, cv::MORPH_ERODE, SE_NUM_ARR[effectiveNum]);
 
-		cv::reduce(numZero, horizontalProjection, 0, cv::REDUCE_SUM, CV_32F);
-		cols = horizontalProjection.cols;
-		left = horizontalProjection(cv::Range::all(), cv::Range(0, (cols / 2 - 10)));
-		right = horizontalProjection(cv::Range::all(), cv::Range((cols / 2 + 10), cols));
+		// If the Result has a non 0 in it we have a match
+		if (cv::countNonZero(numMat) > 0) {
+			bool found = false;
+			
+			cv::reduce(numMat, horizontalProjection, 0, cv::REDUCE_SUM, CV_32F);
+			cols = horizontalProjection.cols;
+			left = horizontalProjection(cv::Range::all(), cv::Range(SIGN_OUTSIDE_OFFSET_PX, (cols / 2 - SIGN_MIDDLE_OFFSET_PX)));
+			right = horizontalProjection(cv::Range::all(), cv::Range((cols / 2 + SIGN_MIDDLE_OFFSET_PX), cols - SIGN_OUTSIDE_OFFSET_PX));
 
-		if (cv::countNonZero(left) > 0) {
-			tensDigitPlaceValue = 0;
+			if (cv::countNonZero(left) > 0) {
+				tensDigitPlaceValue = effectiveNum;
+				found = true;
+				//printDebugLine("left count for number (" + std::to_string(effectiveNum) + ") = " + std::to_string(cv::countNonZero(left)));
+			}
+			if (cv::countNonZero(right) > 0) {
+				onesDigitPlaceValue = effectiveNum;
+				found = true;
+				//printDebugLine("right count for number (" + std::to_string(effectiveNum) + ") = " + std::to_string(cv::countNonZero(right)));
+			}
+
+			// Add it to the Output Mat?
+			if (found) {
+				cv::rotate(SE_NUM_ARR[effectiveNum], rotatedSE, cv::ROTATE_180);
+				cv::morphologyEx(numMat, numMat, cv::MORPH_DILATE, rotatedSE);
+				speed += numMat;
+				//showDebugImage("Number Mat", numMat, cv::WINDOW_AUTOSIZE);
+			}
 		}
-		if (cv::countNonZero(right) > 0) {
-			onesDigitPlaceValue = 0;
-		}
-
-		// Add it to the Output Mat?
-		cv::rotate(SE_NUM_ZERO, rotatedSE, cv::ROTATE_180);
-		cv::morphologyEx(numZero, numZero, cv::MORPH_DILATE, rotatedSE);
-		speed += numZero;
-	}
-	
-
-	// Four
-	cv::Mat numFour;
-	cv::morphologyEx(resizedInput, numFour, cv::MORPH_ERODE, SE_NUM_FOUR);
-
-	// Result check
-	if (cv::countNonZero(numFour) > 0) {
-
-		cv::reduce(numFour, horizontalProjection, 0, cv::REDUCE_SUM, CV_32F);
-		cols = horizontalProjection.cols;
-		left = horizontalProjection(cv::Range::all(), cv::Range(0, (cols / 2 - 10)));
-		right = horizontalProjection(cv::Range::all(), cv::Range((cols / 2 + 10), cols));
-
-		if (cv::countNonZero(left) > 0) {
-			tensDigitPlaceValue = 4;
-		}
-		if (cv::countNonZero(right) > 0) {
-			onesDigitPlaceValue = 4;
-		}
-
-		// Add it to the Output Mat?
-		cv::rotate(SE_NUM_FOUR, rotatedSE, cv::ROTATE_180);
-		cv::morphologyEx(numFour, numFour, cv::MORPH_DILATE, rotatedSE);
-		speed += numFour;
 	}
 
 	if (tensDigitPlaceValue != 0 || onesDigitPlaceValue != 0) {

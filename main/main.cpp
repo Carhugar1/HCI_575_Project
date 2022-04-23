@@ -15,7 +15,7 @@
 
 
 // compile command:
-// cl /EHsc main.cpp detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/debugUtil.obj
+// cl /EHsc /Fe:main main.cpp detection.cpp /I %OpenCV_Path%\build\include /link /LIBPATH:%OpenCV_Path%\build\x64\vc15\lib opencv_world455.lib utils/debugUtil.obj
 
 // execute command:
 // main.exe
