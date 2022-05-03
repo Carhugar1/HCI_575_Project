@@ -1,3 +1,4 @@
+#include <opencv2/core/core.hpp> 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
@@ -23,8 +24,15 @@
 
 
 // Input file
-const char* inputfile = "../test/resources/Images/40mph/20220312_105508.mp4_frame509.jpg";
+const char* inputfile = "../test/resources/Videos/20220312_105508.mp4";
 
+// Output file
+const char* outputfile = "../main/out.mp4";
+
+
+// Video Capture
+cv::VideoCapture inputCap;
+cv::VideoWriter outputCap;
 
 // Global Mats
 cv::Mat originalImg;
@@ -33,17 +41,40 @@ cv::Mat outputImg;
 
 int main() {
 
-	originalImg = cv::imread(inputfile, cv::IMREAD_COLOR);
+	inputCap = cv::VideoCapture(inputfile);
 
-	// ensure image was valid
-	if (!originalImg.data) {
-		std::cout << "Missing data." << std::endl;
+	// Check validity of target file
+	if (!inputCap.isOpened()) {
+		std::cout << "Input video not found." << std::endl;
 		return -1;
 	}
 
-	showDebugImage("Input Image", originalImg, cv::WINDOW_NORMAL);
+	outputCap = cv::VideoWriter(outputfile,
+		cv::VideoWriter::fourcc('a', 'v', 'c', '1'),
+		inputCap.get(cv::CAP_PROP_FPS),
+		cv::Size(inputCap.get(cv::CAP_PROP_FRAME_WIDTH),
+			inputCap.get(cv::CAP_PROP_FRAME_HEIGHT))
+	);
 
-	processFrame(originalImg, outputImg);
+	// Again, check validity of target output file
+	if (!outputCap.isOpened()) {
+		std::cout << "Could not create output file." << std::endl;
+		return -1;
+	}
+
+	cv::Mat inputFrame, outputFrame;
+	int frameNum = 0;
+	while (inputCap.read(inputFrame)) {
+
+		processFrame(inputFrame, outputFrame, frameNum);
+
+		frameNum++;
+		outputCap.write(outputFrame);
+	}
+
+	// free the capture objects from memory
+	inputCap.release();
+	outputCap.release();
 
 	// Clean up
 	cv::destroyAllWindows();

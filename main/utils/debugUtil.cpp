@@ -10,7 +10,7 @@
 // Author: Branden Sammons
 // --------------------------
 
-const bool DEBUG_MODE = true;
+const bool DEBUG_MODE = false;
 
 // compile command:
 // cl /EHsc /c debugUtil.cpp /I %OpenCV_Path%\build\include
